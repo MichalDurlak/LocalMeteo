@@ -1,4 +1,8 @@
 from typing import Union
+
+import sqlite3
+
+import uvicorn
 from fastapi import FastAPI
 
 app = FastAPI()
@@ -7,9 +11,67 @@ def read_root():
     return {"AppStatus": "Woking"}
 
 @app.get("/weatherstation/updateweatherstation.php")
-def read_local_weather(ID:str,PASSWORD:str,dateutc:str,baromin:str,tempf:str,humidity:str,dewptf:str,rainin:str,dailyrainin:str,winddir:str,windspeedmph:str,windgustmph:str,UV:str,solarRadiation:str):
-    file = open("results.txt","a+")
-    data2137 = f"{ID},{PASSWORD},{dateutc},{baromin},{tempf},{humidity},{dewptf},{rainin},{dailyrainin},{winddir},{windspeedmph},{windgustmph},{UV},{solarRadiation}"
-    file.write(data2137)
+def read_local_weather(ID:str,PASSWORD:str,dateutc:str,baromin:float,tempf:float,humidity:int,dewptf:float,rainin:float,dailyrainin:float,winddir:int,windspeedmph:int,windgustmph:int,UV:int,solarRadiation:int):
+    weather_record_add(ID,PASSWORD,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation)
     return {ID,PASSWORD,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation}
 
+
+def init_local_database():
+    print("Initializing local database")
+    con = sqlite3.connect("weather.db")
+    cur = con.cursor()
+
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS weather(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    id_wunderground STRING,
+    password_wunderground STRING,
+    dateutc STRING,
+    baromin FLOAT,
+    tempf FLOAT,
+    humidity INT,
+    dewptf FLOAT,
+    rainin FLOAT,
+    dailyrainin FLOAT,
+    winddir INT,
+    windspeedmph INT,
+    windgustmph INT,
+    uv INT,
+    solarRadiation INT)''')
+
+    con.commit()
+    con.close()
+
+def weather_record_add(id_wunderground,password_wunderground,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation):
+    con = sqlite3.connect("weather.db")
+    cur = con.cursor()
+
+    cur.execute('''
+    INSERT INTO weather(    
+    id_wunderground,
+    password_wunderground,
+    dateutc,
+    baromin,
+    tempf,
+    humidity,
+    dewptf,
+    rainin,
+    dailyrainin,
+    winddir,
+    windspeedmph,
+    windgustmph,
+    uv,
+    solarRadiation )
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ''', (id_wunderground,password_wunderground,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation))
+    con.commit()
+    con.close()
+
+
+def main():
+    init_local_database()
+    uvicorn.run(app, host="0.0.0.0", port=80)
+
+if __name__ == "__main__":
+    main()
