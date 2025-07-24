@@ -1,4 +1,5 @@
 from typing import Union
+from dnserver import DNSServer
 
 import sqlite3
 
@@ -10,10 +11,13 @@ app = FastAPI()
 def read_root():
     return {"AppStatus": "Woking"}
 
-@app.get("/weatherstation/updateweatherstation.php")
-def read_local_weather(ID:str,PASSWORD:str,dateutc:str,baromin:float,tempf:float,humidity:int,dewptf:float,rainin:float,dailyrainin:float,winddir:int,windspeedmph:int,windgustmph:int,UV:int,solarRadiation:int):
+@app.get("/weatherstation/updateweatherstation.php", status_code=200)
+def read_local_weather(ID:str,PASSWORD:str,dateutc:str,baromin:float,tempf:float,humidity:int,dewptf:float,rainin:float,dailyrainin:float,winddir:int,windspeedmph:float,windgustmph:float,UV:float,solarRadiation:float):
     weather_record_add(ID,PASSWORD,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation)
-    return {ID,PASSWORD,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation}
+    # return {ID,PASSWORD,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation}
+    return {"AppStatus": "Working. Record saved in database",
+            "Status":"OK",
+            "Status_Code":200}
 
 
 def init_local_database():
@@ -36,9 +40,9 @@ def init_local_database():
     dailyrainin FLOAT,
     winddir INT,
     windspeedmph INT,
-    windgustmph INT,
-    uv INT,
-    solarRadiation INT)''')
+    windgustmph FLOAT,
+    uv FLOAT,
+    solarRadiation FLOAT)''')
 
     con.commit()
     con.close()
@@ -71,6 +75,11 @@ def weather_record_add(id_wunderground,password_wunderground,dateutc,baromin,tem
 
 def main():
     init_local_database()
+
+    server = DNSServer.from_toml('dns_records.toml', port=53)
+    server.start()
+    assert server.is_running
+
     uvicorn.run(app, host="0.0.0.0", port=80)
 
 if __name__ == "__main__":
