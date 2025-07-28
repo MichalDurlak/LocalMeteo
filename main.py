@@ -1,4 +1,6 @@
 from typing import Union
+
+import bcrypt
 from dnserver import DNSServer
 
 import sqlite3
@@ -7,9 +9,9 @@ import uvicorn
 from fastapi import FastAPI
 
 app = FastAPI()
-@app.get("/")
+@app.get("/", status_code=200)
 def read_root():
-    return {"AppStatus": "Woking"}
+    return {"AppStatus": "Working"}
 
 @app.get("/weatherstation/updateweatherstation.php", status_code=200)
 def read_local_weather(ID:str,PASSWORD:str,dateutc:str,baromin:float,tempf:float,humidity:int,dewptf:float,rainin:float,dailyrainin:float,winddir:int,windspeedmph:float,windgustmph:float,UV:float,solarRadiation:float):
@@ -68,10 +70,13 @@ def weather_record_add(id_wunderground,password_wunderground,dateutc,baromin,tem
     uv,
     solarRadiation )
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    ''', (id_wunderground,password_wunderground,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation))
+    ''', (id_wunderground,hash_password(password_wunderground),dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation))
     con.commit()
     con.close()
 
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(14)).decode()
 
 def main():
     init_local_database()
