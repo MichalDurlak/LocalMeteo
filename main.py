@@ -6,7 +6,13 @@ from dnserver import DNSServer
 import sqlite3
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+
+from cachetools import TTLCache
+from hashlib import sha256
+
+#Cache for the same records (Vevor sent 3 the same get requests)
+request_cache = TTLCache(maxsize=100, ttl=10)
 
 app = FastAPI()
 @app.get("/", status_code=200)
@@ -15,6 +21,12 @@ def read_root():
 
 @app.get("/weatherstation/updateweatherstation.php", status_code=200)
 def read_local_weather(ID:str,PASSWORD:str,dateutc:str,baromin:float,tempf:float,humidity:int,dewptf:float,rainin:float,dailyrainin:float,winddir:int,windspeedmph:float,windgustmph:float,UV:float,solarRadiation:float):
+
+    key = sha256(dateutc.encode()).hexdigest()
+    if key in request_cache:
+        raise HTTPException(status_code=429, detail="Too many requests")
+    request_cache[key] = True
+
     weather_record_add(ID,PASSWORD,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation)
     # return {ID,PASSWORD,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation}
     return {"AppStatus": "Working. Record saved in database",
