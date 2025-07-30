@@ -6,7 +6,9 @@ from dnserver import DNSServer
 import sqlite3
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 
 from cachetools import TTLCache
 from hashlib import sha256
@@ -15,9 +17,23 @@ from hashlib import sha256
 request_cache = TTLCache(maxsize=100, ttl=10)
 
 app = FastAPI()
-@app.get("/", status_code=200)
-def read_root():
-    return {"AppStatus": "Working"}
+templates = Jinja2Templates(directory="templates")
+@app.get("/", status_code=200, response_class=HTMLResponse)
+@app.get("/index.html", status_code=200, response_class=HTMLResponse)
+@app.get("/app.html", status_code=200, response_class=HTMLResponse)
+def read_root(request: Request):
+    context = {"request": request}
+    return templates.TemplateResponse("app.html",context=context)
+
+@app.get("/login", status_code=200, response_class=HTMLResponse)
+def read_root(request: Request):
+    context = {"request": request}
+    return templates.TemplateResponse("login.html",context=context)
+
+@app.get("/register", status_code=200, response_class=HTMLResponse)
+def read_root(request: Request):
+    context = {"request": request}
+    return templates.TemplateResponse("register.html",context=context)
 
 @app.get("/weatherstation/updateweatherstation.php", status_code=200)
 def read_local_weather(ID:str,PASSWORD:str,dateutc:str,baromin:float,tempf:float,humidity:int,dewptf:float,rainin:float,dailyrainin:float,winddir:int,windspeedmph:float,windgustmph:float,UV:float,solarRadiation:float):
@@ -39,6 +55,7 @@ def init_local_database():
     con = sqlite3.connect("weather.db")
     cur = con.cursor()
 
+    #CREATE TABLE FOR WEATHER DATA
     cur.execute('''
     CREATE TABLE IF NOT EXISTS weather(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +74,33 @@ def init_local_database():
     windgustmph FLOAT,
     uv FLOAT,
     solarRadiation FLOAT)''')
+    con.commit()
 
+    #CREATE TABLE FOR USER
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS users(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username STRING,
+    password STRING,
+    email STRING
+    )''')
+    con.commit()
+
+    con.close()
+
+
+def user_record_add(username:str,password:str,email:str):
+    con = sqlite3.connect("weather.db")
+    cur = con.cursor()
+
+    cur.execute('''
+    INSERT INTO weather(
+    username,
+    password,
+    email
+    )
+    VALUES (?,?,?)
+    ''', (username,hash_password(password),email))
     con.commit()
     con.close()
 
