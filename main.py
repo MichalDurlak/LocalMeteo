@@ -19,19 +19,19 @@ request_cache = TTLCache(maxsize=100, ttl=10)
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
-@app.get("/", status_code=200, response_class=HTMLResponse)
-@app.get("/index.html", status_code=200, response_class=HTMLResponse)
-@app.get("/app.html", status_code=200, response_class=HTMLResponse)
+@app.get("/", status_code=200, response_class=HTMLResponse, include_in_schema=False)
+@app.get("/index.html", status_code=200, response_class=HTMLResponse, include_in_schema=False)
+@app.get("/app.html", status_code=200, response_class=HTMLResponse, include_in_schema=False)
 def app_get(request: Request):
     context = {"request": request}
     return templates.TemplateResponse("app.html",context=context)
 
-@app.get("/login", status_code=200, response_class=HTMLResponse)
+@app.get("/login", status_code=200, response_class=HTMLResponse, include_in_schema=False)
 def login_get(request: Request):
     context = {"request": request}
     return templates.TemplateResponse("login.html",context=context)
 
-@app.post("/login", status_code=200, response_class=HTMLResponse)
+@app.post("/login", status_code=200, response_class=HTMLResponse, include_in_schema=False)
 def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
     if user_record_login(username, password):
         response = RedirectResponse(url="/", status_code=302)
@@ -43,12 +43,12 @@ def login_post(request: Request, username: str = Form(...), password: str = Form
             "error": "Nieprawidłowy login lub hasło"
         })
 
-@app.get("/register", status_code=200, response_class=HTMLResponse)
+@app.get("/register", status_code=200, response_class=HTMLResponse, include_in_schema=False)
 def register_get(request: Request):
     context = {"request": request}
     return templates.TemplateResponse("register.html",context=context)
 
-@app.post("/register", status_code=200, response_class=HTMLResponse)
+@app.post("/register", status_code=200, response_class=HTMLResponse,include_in_schema=False)
 def register_post(request: Request, username: str = Form(...), password: str = Form(...), email: str = Form(...)):
     if username is not None and password is not None and email is not None:
         if user_record_add(username, password, email):
