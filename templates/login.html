@@ -68,6 +68,11 @@
 <body>
   <div class="container">
     <h2>Logowanie</h2>
+
+    {% if error %}
+      <div class="error" style="color: red;">{{ error }}</div>
+    {% endif %}
+
     <form action="/login" method="post">
       <label for="username">Nazwa użytkownika</label>
       <input type="text" id="username" name="username" required />
@@ -78,7 +83,7 @@
       <button type="submit">Zaloguj się</button>
     </form>
     <div class="footer">
-      Nie masz konta? <a href="register.html">Zarejestruj się</a>
+      Nie masz konta? <a href="register">Zarejestruj się</a>
     </div>
   </div>
 </body>

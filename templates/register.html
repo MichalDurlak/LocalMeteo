@@ -68,6 +68,14 @@
 <body>
   <div class="container">
     <h2>Rejestracja</h2>
+    {% if success %}
+      <div class="success" style="color: green;">{{ success }}</div>
+    {% endif %}
+
+    {% if error %}
+      <div class="error" style="color: red;">{{ error }}</div>
+    {% endif %}
+
     <form action="/register" method="post">
       <label for="username">Nazwa użytkownika</label>
       <input type="text" id="username" name="username" required />
@@ -81,7 +89,7 @@
       <button type="submit">Zarejestruj się</button>
     </form>
     <div class="footer">
-      Masz już konto? <a href="login.html">Zaloguj się</a>
+      Masz już konto? <a href="login">Zaloguj się</a>
     </div>
   </div>
 </body>

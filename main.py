@@ -6,9 +6,10 @@ from dnserver import DNSServer
 import sqlite3
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 
 from cachetools import TTLCache
 from hashlib import sha256
@@ -21,19 +22,52 @@ templates = Jinja2Templates(directory="templates")
 @app.get("/", status_code=200, response_class=HTMLResponse)
 @app.get("/index.html", status_code=200, response_class=HTMLResponse)
 @app.get("/app.html", status_code=200, response_class=HTMLResponse)
-def read_root(request: Request):
+def app_get(request: Request):
     context = {"request": request}
     return templates.TemplateResponse("app.html",context=context)
 
 @app.get("/login", status_code=200, response_class=HTMLResponse)
-def read_root(request: Request):
+def login_get(request: Request):
     context = {"request": request}
     return templates.TemplateResponse("login.html",context=context)
 
+@app.post("/login", status_code=200, response_class=HTMLResponse)
+def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
+    if user_record_login(username, password):
+        response = RedirectResponse(url="/", status_code=302)
+        return response
+    else:
+        # Możesz dodać komunikat o błędzie w przyszłości
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Nieprawidłowy login lub hasło"
+        })
+
 @app.get("/register", status_code=200, response_class=HTMLResponse)
-def read_root(request: Request):
+def register_get(request: Request):
     context = {"request": request}
     return templates.TemplateResponse("register.html",context=context)
+
+@app.post("/register", status_code=200, response_class=HTMLResponse)
+def register_post(request: Request, username: str = Form(...), password: str = Form(...), email: str = Form(...)):
+    if username is not None and password is not None and email is not None:
+        if user_record_add(username, password, email):
+            return templates.TemplateResponse("register.html", {
+                "request": request,
+                "success": "Użytkownik pomyślnie założony."
+            })
+        else:
+            return templates.TemplateResponse("register.html", {
+                "request": request,
+                "error": "Konto o takim loginie lub emailu jest juz w bazie."
+            })
+    else:
+        # Możesz dodać komunikat o błędzie w przyszłości
+        return templates.TemplateResponse("register.html", {
+            "request": request,
+            "error": "Cos poszlo nie tak. Sprawdz czy na pewno wszystkie dane sa poprawne."
+        })
+
 
 @app.get("/weatherstation/updateweatherstation.php", status_code=200)
 def read_local_weather(ID:str,PASSWORD:str,dateutc:str,baromin:float,tempf:float,humidity:int,dewptf:float,rainin:float,dailyrainin:float,winddir:int,windspeedmph:float,windgustmph:float,UV:float,solarRadiation:float):
@@ -80,29 +114,55 @@ def init_local_database():
     cur.execute('''
     CREATE TABLE IF NOT EXISTS users(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username STRING,
+    username STRING UNIQUE,
     password STRING,
-    email STRING
+    email STRING UNIQUE
     )''')
     con.commit()
 
     con.close()
 
 
-def user_record_add(username:str,password:str,email:str):
+def user_record_add(username:str,password:str,email:str) -> bool:
+    try:
+        con = sqlite3.connect("weather.db")
+        cur = con.cursor()
+
+        cur.execute('''
+        INSERT INTO users(
+        username,
+        password,
+        email
+        )
+        VALUES (?,?,?)
+        ''', (username,hash_password(password),email))
+        con.commit()
+        return True
+    except sqlite3.IntegrityError as e:
+        print(f"Błąd dodawania użytkownika: {e}")
+        return False
+
+    finally:
+        con.close()
+
+def user_record_login(username:str,password:str) -> bool:
     con = sqlite3.connect("weather.db")
     cur = con.cursor()
 
-    cur.execute('''
-    INSERT INTO weather(
-    username,
-    password,
-    email
-    )
-    VALUES (?,?,?)
-    ''', (username,hash_password(password),email))
-    con.commit()
+    cur.execute("SELECT password FROM users WHERE username = ?", (username,))
+    result = cur.fetchone()
+
     con.close()
+
+    if result is None:
+        # Użytkownik nie istnieje
+        return False
+
+    hashed_password = result[0]
+
+    # Sprawdzenie hasła z użyciem bcrypt
+    return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+
 
 def weather_record_add(id_wunderground,password_wunderground,dateutc,baromin,tempf,humidity,dewptf,rainin,dailyrainin,winddir,windspeedmph,windgustmph,UV,solarRadiation):
     con = sqlite3.connect("weather.db")
