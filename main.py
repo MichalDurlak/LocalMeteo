@@ -14,34 +14,138 @@ from fastapi.responses import RedirectResponse
 from cachetools import TTLCache
 from hashlib import sha256
 
+from pydantic import BaseModel
+from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
+from uuid import UUID
+from fastapi_sessions.backends.implementations import InMemoryBackend
+from fastapi_sessions.session_verifier import SessionVerifier
+from fastapi import HTTPException
+from uuid import uuid4
+from fastapi import FastAPI, Response
+from fastapi import Depends
+from fastapi import Request
+from typing import Optional
+
 #Cache for the same records (Vevor sent 3 the same get requests)
 request_cache = TTLCache(maxsize=100, ttl=10)
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
+
+#Sessions
+class SessionData(BaseModel):
+    username: str
+
+cookie_params = CookieParameters()
+#TODO: ZACZYTYWANIE MAX_AGE Z PLIKU KONFIGURACYJNEGO
+cookie_params.max_age=60*60*30
+
+# Uses UUID
+cookie = SessionCookie(
+    cookie_name="cookie_localmeteo",
+    identifier="general_verifier",
+    auto_error=True,
+    secret_key="DONOTUSE", #TODO: BETTER SECRET_KEY
+    cookie_params=cookie_params,
+)
+
+backend = InMemoryBackend[UUID, SessionData]()
+
+class BasicVerifier(SessionVerifier[UUID, SessionData]):
+    def __init__(
+        self,
+        *,
+        identifier: str,
+        auto_error: bool,
+        backend: InMemoryBackend[UUID, SessionData],
+        auth_http_exception: HTTPException,
+    ):
+        self._identifier = identifier
+        self._auto_error = auto_error
+        self._backend = backend
+        self._auth_http_exception = auth_http_exception
+
+    @property
+    def identifier(self):
+        return self._identifier
+
+    @property
+    def backend(self):
+        return self._backend
+
+    @property
+    def auto_error(self):
+        return self._auto_error
+
+    @property
+    def auth_http_exception(self):
+        return self._auth_http_exception
+
+    def verify_session(self, model: SessionData) -> bool:
+        """If the session exists, it is valid"""
+        return True
+
+
+verifier = BasicVerifier(
+    identifier="general_verifier",
+    auto_error=True,
+    backend=backend,
+    auth_http_exception=HTTPException(status_code=302, detail="Not authorized", headers = {"Location": "/login"}),
+)
+
+
+#ONLY FOR TEST
+@app.get("/sessions", dependencies=[Depends(cookie)])
+async def whoami(session_data: SessionData = Depends(verifier)):
+    return session_data
+
+#TODO: doczytac czy powinno byc get czy post (na faze testow ustawiam get, ale w poradniku byl post)
+@app.get("/logout")
+async def logout_get(session_id: UUID = Depends(cookie)):
+    await backend.delete(session_id)
+    response = RedirectResponse(url="/login", status_code=302)
+    cookie.delete_from_response(response)
+    return response
+
+
+async def get_optional_session_id(request: Request) -> Optional[UUID]:
+    try:
+        return cookie(request)
+    except Exception:
+        return None
+
+############
+session_data = None
 @app.get("/", status_code=200, response_class=HTMLResponse)
 @app.get("/index.html", status_code=200, response_class=HTMLResponse)
 @app.get("/app.html", status_code=200, response_class=HTMLResponse)
-def app_get(request: Request):
+async def app_get(request: Request, session_id: Optional[UUID] = Depends(get_optional_session_id)):
     context = {"request": request}
-    return templates.TemplateResponse("app.html",context=context)
+    if session_id:
+        session_data = await backend.read(session_id)
+        if session_data:
+            print(session_data.username)
+            return templates.TemplateResponse("app.html", {"request": request, "session_data": session_data})
+    return RedirectResponse(url="/login", status_code=302)
 
 @app.get("/login", status_code=200, response_class=HTMLResponse)
 def login_get(request: Request):
     context = {"request": request}
     return templates.TemplateResponse("login.html",context=context)
 
-@app.post("/login", status_code=200, response_class=HTMLResponse)
-def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
+@app.post("/login")
+async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
     if user_record_login(username, password):
+        session = uuid4()
+        data = SessionData(username=username)
+        await backend.create(session, data)
+
         response = RedirectResponse(url="/", status_code=302)
+        cookie.attach_to_response(response, session)
+        # print(data)
         return response
     else:
-        # Możesz dodać komunikat o błędzie w przyszłości
-        return templates.TemplateResponse("login.html", {
-            "request": request,
-            "error": "Nieprawidłowy login lub hasło"
-        })
+        return templates.TemplateResponse("login.html", {"request": request, "error": "Nieprawidłowy login lub hasło"})
 
 @app.get("/register", status_code=200, response_class=HTMLResponse)
 def register_get(request: Request):
